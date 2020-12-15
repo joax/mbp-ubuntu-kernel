@@ -8,7 +8,7 @@ KERNEL_VERSION=5.7.19
 #KERNEL_REPOSITORY=git://kernel.ubuntu.com/virgin/linux-stable.git
 KERNEL_REPOSITORY=https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
 REPO_PATH=$(pwd)
-WORKING_PATH=/root/work
+WORKING_PATH=${REPO_PATH}/work
 KERNEL_PATH="${WORKING_PATH}/linux-kernel"
 
 ### Debug commands
