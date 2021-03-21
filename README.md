@@ -1,10 +1,18 @@
 # mbp-ubuntu-kernel
 
-This repo is still a work in progress.
+Ubuntu/Mint/Debian kernel 5.6+ with Apple T2 patches built-in. This repo try to keep up with kernel new releases.
 
-Ubuntu/Mint/Debian kernel 5.6 with Apple T2 patches built-in (Macbooks produced >= 2018).
+We release 2 alternative kernels: **"mbp"** which includes all patches from [Aunali1's linux mbp arch](https://github.com/aunali1/linux-mbp-arch) which should work in mostly everywhere and an alternative release (**"mbp-alt"**) which do not include the patch 2001 (drm amd display force link-rate).
 
-Drivers:
+**!! Warning:** 
+
+Starting from the kernel 5.8 the release naming were switch with respect to kernel 5.7: Before the "mbp" release did not include all the patches. **Now the "mbp" includes all patches** and the "mbp-alt" don't.
+
+**!! Warning:**
+
+It seems, that the kernel 5.8 is not working as smooth as the 5.7 branch. If you experience problems while installing or running the linux in your mbp, try using an older Kernel.
+
+**Drivers included:**
 
 - Apple T2 (audio, keyboard, touchpad) - <https://github.com/MCMrARM/mbp2018-bridge-drv>
 - Apple SMC - <https://github.com/MCMrARM/mbp2018-etc>
@@ -12,7 +20,7 @@ Drivers:
 
 This project is closely inspired by mikeeq/mbp-fedora-kernel. Thank you @mikeeq for the scripts and setup.
 
-IF YOU ENJOY THIS CODE, CONSIDER CONTRIBUTING TO THE AUTHORS @MCMrARM @roadrunner2 @aunali1 @ppaulweber @mikeeq, they did all the hard work.
+**If this repo helped you in any way, consider inviting a coffee to the people in the [credits](https://github.com/marcosfad/mbp-ubuntu-kernel#credits) or [me](https://paypal.me/marcosfad)**
 
 ## CI status
 
@@ -21,6 +29,25 @@ Drone kernel build status:
 
 Travis kernel publish status - <http://mbp-ubuntu-kernel.herokuapp.com/> :
 [![Build Status](https://travis-ci.com/marcosfad/mbp-ubuntu-kernel.svg?branch=master)](https://travis-ci.com/marcosfad/mbp-ubuntu-kernel)
+
+## INSTALLATION
+
+### The easy way
+
+Use the [mbp-ubuntu](https://github.com/marcosfad/mbp-ubuntu/releases) live cd to install ubuntu on your Mac.
+
+### Manually
+
+Add the repo to your apt sources
+```bash
+echo "deb https://mbp-ubuntu-kernel.herokuapp.com/ /" >/etc/apt/sources.list.d/mbp-ubuntu-kernel.list
+curl -L https://mbp-ubuntu-kernel.herokuapp.com/KEY.gpg | apt-key add -
+apt-get update
+```
+Install the kernel using apt, for example kernel 5.7.9:
+```bash
+apt-get install linux-headers-5.7.9-mbp linux-image-5.7.9-mbp
+```
 
 ## Docs
 
@@ -58,6 +85,6 @@ Travis kernel publish status - <http://mbp-ubuntu-kernel.herokuapp.com/> :
 - @MCMrARM - thanks for all RE work
 - @ozbenh - thanks for submitting NVME patch
 - @roadrunner2 - thanks for SPI (touchbar) driver
-- @aunali1 - thanks for ArchLinux Kernel CI
+- @aunali1 - thanks for ArchLinux Kernel CI and active support.
 - @ppaulweber - thanks for keyboard and Macbook Air patches
 - @mikeeq - thanks for the fedora kernel project and compilation scripts

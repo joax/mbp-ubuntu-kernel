@@ -4,7 +4,7 @@ set -eu -o pipefail
 
 ## Update docker image tag, because kernel build is using `uname -r` when defining package version variable
 # KERNEL_VERSION=$(curl -s https://www.kernel.org | grep '<strong>' | head -3 | tail -1 | cut -d'>' -f3 | cut -d'<' -f1)
-KERNEL_VERSION=5.6.13
+KERNEL_VERSION=5.9.7
 #KERNEL_REPOSITORY=git://kernel.ubuntu.com/virgin/linux-stable.git
 KERNEL_REPOSITORY=https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
 REPO_PATH=$(pwd)
@@ -18,24 +18,38 @@ echo "Current path: ${REPO_PATH}"
 echo "CPU threads: $(nproc --all)"
 grep 'model name' /proc/cpuinfo | uniq
 
+get_next_version () {
+  curl -s https://mbp-ubuntu-kernel.herokuapp.com/ -L | grep "linux-image-${KERNEL_VERSION}-${1}" > /dev/null
+  OLD_BUILD_EXIST=$?
+  if test $OLD_BUILD_EXIST -eq 0
+  then
+    LATEST_BUILD=$(curl -s https://mbp-ubuntu-kernel.herokuapp.com/ -L | grep "linux-image-${KERNEL_VERSION}-${1}" |
+      grep a | cut -d'>' -f2 | cut -d'<' -f1 |
+      sort -r | head -n 1 | cut -d'-' -f6 | cut -d'_' -f1)
+  else
+    LATEST_BUILD=0
+  fi
+  echo "$((LATEST_BUILD+1))"
+}
+
 ### Clean up
 rm -rfv ./*.deb
 
 mkdir "${WORKING_PATH}" && cd "${WORKING_PATH}"
 cp -rf "${REPO_PATH}"/{patches,templates} "${WORKING_PATH}"
-rm -rf linux-*
+rm -rf "${KERNEL_PATH}"
 
 ### Dependencies
 export DEBIAN_FRONTEND=noninteractive
-apt update
-apt install -y build-essential fakeroot libncurses-dev bison flex libssl-dev libelf-dev \
+apt-get update
+apt-get install -y build-essential fakeroot libncurses-dev bison flex libssl-dev libelf-dev \
   openssl dkms libudev-dev libpci-dev libiberty-dev autoconf wget xz-utils git \
   bc rsync cpio dh-modaliases debhelper kernel-wedge curl
 
 ### get Kernel
 git clone --depth 1 --single-branch --branch "v${KERNEL_VERSION}" \
   "${KERNEL_REPOSITORY}" "${KERNEL_PATH}"
-cd ./linux-kernel || exit
+cd "${KERNEL_PATH}" || exit
 
 #### Create patch file with custom drivers
 echo >&2 "===]> Info: Creating patch file... "
@@ -49,18 +63,12 @@ echo >&2 "===]> Info: Applying patches... "
   echo 'Patches directory not found!'
   exit 1
 }
-while IFS= read -r file; do
-  echo "adding $file"
-  patch -p1 <"$file"
-done < <(find "${WORKING_PATH}/patches" -type f -name "*.patch" | sort)
 
-#echo >&2 "===]> Info: Add drivers default configuration... "
-### Add new drivers. This config files comes on the one of the patches...
-#echo "CONFIG_APPLE_BCE_DRIVER=m" >>"${KERNEL_PATH}/debian.master/config/amd64/config.common.ubuntu"
-#echo "CONFIG_APPLE_TOUCHBAR_DRIVER=m" >>"${KERNEL_PATH}/debian.master/config/amd64/config.common.ubuntu"
-#find "${KERNEL_PATH}/debian.master/config/" -type f -name "generic.modules" -exec sh -c '
-#  echo -e "apple-bce.ko\napple-ib-als.ko\napple-ib-tb.ko\napple-ibridge.ko" >> $1
-#' sh {} \;
+
+while IFS= read -r file; do
+  echo "==> Adding $file"
+  patch -p1 <"$file"
+done < <(find "${WORKING_PATH}/patches" -type f -name "*.patch" | grep -vE '[2]00[0-9]' | sort)
 
 chmod a+x "${KERNEL_PATH}"/debian/rules
 chmod a+x "${KERNEL_PATH}"/debian/scripts/*
@@ -70,21 +78,34 @@ echo >&2 "===]> Info: Bulding src... "
 
 cd "${KERNEL_PATH}"
 make clean
-cp "${WORKING_PATH}/templates/default-config" .config
+cp "${WORKING_PATH}/templates/default-config" "${KERNEL_PATH}/.config"
 make olddefconfig
 
 # Get rid of the dirty tag
-#LASTEST_BUILD=$(curl -s https://mbp-ubuntu-kernel.herokuapp.com/ -L |
-#  grep linux-image-${KERNEL_VERSION} | grep a | cut -d'>' -f2 | cut -d'<' -f1 |
-#  sort -r | head -n 1 | cut -d'-' -f6 | cut -d'_' -f1)
-#NEXT_BUILD=$(expr ${LASTEST_BUILD} + 1)
-echo "" >${KERNEL_PATH}/.scmversion
+echo "" >"${KERNEL_PATH}"/.scmversion
 
-make -j "$(getconf _NPROCESSORS_ONLN)" deb-pkg LOCALVERSION=-mbp
+# Build Deb packages
+make -j "$(getconf _NPROCESSORS_ONLN)" deb-pkg LOCALVERSION=-mbp KDEB_PKGVERSION="$(make kernelversion)-$(get_next_version mbp-alt)"
+
+# Create alternative Kernel
+echo >&2 "===]> Info: Create alternative kernel ... "
+make distclean
+make clean
+while IFS= read -r file; do
+  echo "==> Adding $file"
+  patch -p1 <"$file"
+done < <(find "${WORKING_PATH}/patches" -type f -name "*.patch" | grep -E '[2]00[0-9]' | sort)
+cp "${WORKING_PATH}/templates/default-config" "${KERNEL_PATH}/.config"
+make olddefconfig
+echo "" >"${KERNEL_PATH}"/.scmversion
+
+# Build Deb packages
+make -j "$(getconf _NPROCESSORS_ONLN)" deb-pkg LOCALVERSION=-mbp-alt KDEB_PKGVERSION="$(make kernelversion)-$(get_next_version mbp)"
 
 #### Copy artifacts to shared volume
 echo >&2 "===]> Info: Copying debs and calculating SHA256 ... "
 #cp -rfv ../*.deb "${REPO_PATH}/"
-#cp -rfv "${KERNEL_PATH}/.config" "${REPO_PATH}/kernel_config"
+#cp -rfv "${KERNEL_PATH}/.config" "${REPO_PATH}/kernel_config_${KERNEL_VERSION}"
+cp -rfv "${KERNEL_PATH}/.config" "/tmp/artifacts/kernel_config_${KERNEL_VERSION}"
 cp -rfv ../*.deb /tmp/artifacts/
 sha256sum ../*.deb >/tmp/artifacts/sha256
